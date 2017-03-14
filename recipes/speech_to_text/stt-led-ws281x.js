@@ -10,7 +10,9 @@
 * Control a NeoPixel LED unit connected to a Raspberry Pi pin through voice commands
 * Must run with root-level protection
 * sudo node stt.js
+
  Based on example NeoPixel code by Jeremy Garff (jer@jers.net)
+
  Follow the instructions in http://www.instructables.com/id/Use-Your-Voice-to-Control-a-Light-With-Watson/ to
  get the system ready to run this code.
 */
@@ -21,10 +23,6 @@
  In this step, the audio sample (pipe) is sent to "Watson Speech to Text" to transcribe.
  The service converts the audio to text and saves the returned text in "textStream"
 */
-
-var RED_PIN = 11, GREEN_PIN = 13, BLUE_PIN = 15;
-var intervalID = null;
-
 var watson = require('watson-developer-cloud');
 var config = require('./config');  // gets our username and passwords from the config.js files
 var speech_to_text = watson.speech_to_text({
@@ -118,13 +116,11 @@ function parseText(str){
     var containsSet = str.indexOf("set") >= 0;
     var containsLight = str.indexOf("the light") >= 0;
     var containsDisco = str.indexOf("disco") >= 0;
-    var containsRainbow = str.indexOf("rainbow") >= 0;
 
-    if ((containsTurn || containsChange || containsSet ) && containsLight) {
-        if (intervalID) clearInterval(intervalID);
+    if ((containsTurn || containsChange || containsSet) && containsLight) {
         setLED(str);
-    } else if (containsDisco || containsRainbow) {
-        intervalID = discoParty();
+    } else if (containsDisco) {
+        discoParty();
     }
 }
 
@@ -132,79 +128,58 @@ function parseText(str){
  * Step #5: Switching the LED light
  *********************************************************************
  Once the command is recognized, the led light gets changed to reflect that.
+ The npm "onoff" library is used for this purpose. https://github.com/fivdi/onoff
 */
 
-var rpio = require('rpio');
+var ws281x = require('rpi-ws281x-native');
+var NUM_LEDS = 1;        // Number of LEDs
+ws281x.init(NUM_LEDS);   // initialize LEDs
 
+var color = new Uint32Array(NUM_LEDS);  // array that stores colors for leds
+color[0] = 0xffffff;                    // default to white
+
+// note that colors are specified as Green-Red-Blue, not Red-Green-Blue
+// e.g. 0xGGRRBB instead of 0xRRGGBB
 var colorPalette = {
-    "red": [0,1,1],
-    "read": [0,1,1], // sometimes, STT hears "read" instead of "red"
-    "green": [1,0,1],
-    "blue": [1,1,0],
-    "purple": [0,1,0],
-    "yellow": [0,0,1],
-    "pink": [0,1,0],
-    "orange": [0,1,0],
-    "aqua": [0,0,0],
-    "white": [0,0,0],
-    "off": [1,1,1],
-    "on": [0,0,0]
+    "red": 0x00ff00,
+    "read": 0x00ff00, // sometimes, STT hears "read" instead of "red"
+    "green": 0xff0000,
+    "blue": 0x0000ff,
+    "purple": 0x008080,
+    "yellow": 0xc1ff35,
+    "magenta": 0x00ffff,
+    "orange": 0xa5ff00,
+    "aqua": 0xff00ff,
+    "white": 0xffffff,
+    "off": 0x000000,
+    "on": 0xffffff
 }
 
-/*Initialize the pins*/
-var initPins = function(){
-  //Pins: 11,13,15
-  rpio.open(RED_PIN,rpio.OUTPUT, rpio.HIGH);
-  rpio.open(GREEN_PIN,rpio.OUTPUT, rpio.HIGH);
-  rpio.open(BLUE_PIN,rpio.OUTPUT, rpio.HIGH);
-}
-
-var rpioVal = {
-  1 : rpio.HIGH,
-  0 : rpio.LOW
-}
-
-var turnLight = function (colorConfig){
-  initPins();
-  rpio.open(RED_PIN,rpio.OUTPUT, rpioVal[colorConfig[0]]);
-  rpio.open(GREEN_PIN,rpio.OUTPUT, rpioVal[colorConfig[1]]);
-  rpio.open(BLUE_PIN,rpio.OUTPUT, rpioVal[colorConfig[2]]);
-
-}
 // ----  reset LED before exit
 process.on('SIGINT', function () {
-    initPins();
+    ws281x.reset();
     process.nextTick(function () { process.exit(0); });
 });
 
 function setLED(msg){
     var words = msg.split(" ");
-    var color = [0,0,0]; //red
-/*
-    for (var i = 0; i < words.length; i++){
-      if (['red','green','blue'].indexOf(words[i]) > -1){
-        color = words[i];
-        break;
-      }
+    for (var i = 0; i < words.length; i++) {
+        if (words[i] in colorPalette) {
+            color[0] = colorPalette[words[i]];
+            break;
+        }
+    }
+    ws281x.render(color);
+}
+
+function discoParty() {
+    // uncomment this for a disco party!
+    /*for (i = 0; i < 30; i++) {
+        setTimeout(function() {
+            var colors = Object.keys(colorPalette);
+            var randIdx = Math.floor(Math.random() * colors.length);
+            var randColor = colors[randIdx];
+            setLED(randColor);
+        }, i * 250);
     }*/
-   for(var i=0; i < words.length; i++){
-     if (words[i] in colorPalette){
-       color = colorPalette[words[i]];
-     }
-   }
-    turnLight(color);
-    console.log('color = ', color);
 }
-
-var discoParty = function () {
-      var colors = ['red','green','blue','pink','purple','yellow'];
-      return setInterval(function(){
-        var rand = colors[Math.floor(Math.random()*colors.length)];
-        turnLight(colorPalette[rand]);
-      },400);
-
-}
-
-    Contact GitHub API Training Shop Blog About
-
-    © 2017 GitHub, Inc. Terms Privacy Security Status Help
