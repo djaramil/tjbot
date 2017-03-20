@@ -89,5 +89,6 @@ for (var i=0;i<colors.length;i++)
   turnLight(colorPalette[color]);
   sleep.msleep(2000);
 }
+
 console.log("turn lights off");
 turnLight(colorPalette["off"]);
